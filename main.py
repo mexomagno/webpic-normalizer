@@ -22,7 +22,7 @@ class ImageProcessor:
         self.output_image = None
 
     def process(self):
-        opened_img = im.open(self.img_path)
+        opened_img = self._fix_jpeg_rotation(im.open(self.img_path))
         aspect_ratio_in = opened_img.size[0]*1.0 / opened_img.size[1]
         aspect_ratio_out = self.output_size[0]*1.0 / self.output_size[1]
         # make sure new size gets inside output size
@@ -89,6 +89,22 @@ class ImageProcessor:
                                quality=quality,
                                optimize=optimize)
 
+    @staticmethod
+    def _fix_jpeg_rotation(img_object):
+        if hasattr(img_object, '_getexif'):
+            orientation = 0x0112
+            exif = img_object._getexif()
+            if exif:
+                orientation = exif[orientation]
+                rotations = {
+                    3: (im.ROTATE_180, 180),
+                    6: (im.ROTATE_270, 270),
+                    8: (im.ROTATE_90, 90)
+                }
+                print("Rotating image by {}° in compliance to exif metadata".format(rotations[orientation][1]))
+                img_object = img_object.transpose(rotations[orientation][0])
+        return img_object
+
 
 def is_image_file(file_path):
     _, ext = os.path.splitext(os.path.basename(file_path))
@@ -142,7 +158,7 @@ def main():
         # input was a single file
         image_paths.append(options.input)
 
-    print("Files to process: {}. Dir to store: {}".format(image_paths, out_dir))
+    print("Files to process: {}. Dir to store: {}".format(len(image_paths), out_dir))
     print("Options: ")
     for opt in vars(options):
         print("\t- {}: {}".format(opt, getattr(options, opt)))
