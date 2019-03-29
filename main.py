@@ -50,9 +50,9 @@ class ImageProcessor:
             bgypos = self.output_size[1]/2 - bg_height/2
             xpos = 0
             ypos = self.output_size[1]/2 - in_height/2
-        in_img = opened_img.resize((int(in_width), int(in_height)))
+        in_img = opened_img.resize((int(in_width), int(in_height)), im.LANCZOS)
         # Create large copy of image
-        bg_fill = opened_img.resize((int(bg_width), int(bg_height)))
+        bg_fill = opened_img.resize((int(bg_width), int(bg_height)), im.LANCZOS)
         # Blur
         bg_fill = bg_fill.filter(imf.GaussianBlur(self.bg_blur))
         # Opacity
@@ -64,43 +64,44 @@ class ImageProcessor:
         out_img.paste(in_img, (int(xpos), int(ypos)))
         self.output_image = out_img
 
-    def save(self, out_name):
+    def save(self, out_name, quality):
         if not self.output_image:
             raise RuntimeError("You must first call '{}'".format(self.process.__name__))
         if os.path.isfile(out_name):
             raise RuntimeError("File '{}' already exists! Would've overriden".format(out_name))
         input_size_bytes = os.stat(self.img_path).st_size
         # Choose quality based on image size
-        if input_size_bytes < 512*1024:
-            quality = 90
-            optimize = False
-        elif input_size_bytes < 1024*1024:
-            quality = 90
-            optimize = False
-        elif input_size_bytes < 2*1024*1024:
-            quality = 90
-            optimize = False
-        else:
-            quality = 85
-            optimize = True
+        # if input_size_bytes < 512*1024:
+        #     quality = 90
+        #     optimize = False
+        # elif input_size_bytes < 1024*1024:
+        #     quality = 90
+        #     optimize = False
+        # elif input_size_bytes < 2*1024*1024:
+        #     quality = 90
+        #     optimize = False
+        # else:
+        #     quality = 90
+        #     optimize = False
         print("Will compress with quality {}".format(quality))
         self.output_image.save(out_name,
                                format='JPEG',
                                quality=quality,
-                               optimize=optimize)
+                               optimize=False,
+                               subsampling=0)
 
     @staticmethod
     def _fix_jpeg_rotation(img_object):
+        rotations = {
+            3: (im.ROTATE_180, 180),
+            6: (im.ROTATE_270, 270),
+            8: (im.ROTATE_90, 90)
+        }
         if hasattr(img_object, '_getexif'):
             orientation = 0x0112
             exif = img_object._getexif()
-            if exif:
+            if exif and orientation in exif and exif[orientation] in rotations:
                 orientation = exif[orientation]
-                rotations = {
-                    3: (im.ROTATE_180, 180),
-                    6: (im.ROTATE_270, 270),
-                    8: (im.ROTATE_90, 90)
-                }
                 print("Rotating image by {}° in compliance to exif metadata".format(rotations[orientation][1]))
                 img_object = img_object.transpose(rotations[orientation][0])
         return img_object
@@ -133,6 +134,7 @@ def parse_args():
     arg_parser.add_argument("--bgblur", "-b", help="Background fill blur ammount", default=10, type=int)
     arg_parser.add_argument("--bgopacity", "-p", help="Background fill opacity from 0 to 1", default=0.7, type=float)
     arg_parser.add_argument("--bgupscale", "-u", help="Background fill over size from 1", default=1.1, type=float)
+    arg_parser.add_argument("--quality", "-q", help="JPEG Quality", default=90, type=int)
     args = arg_parser.parse_args()
     return args
 
@@ -174,10 +176,11 @@ def main():
         img_processor.process()
         name, ext = os.path.splitext(os.path.basename(img_path))
         if input_is_directory:
-            out_filename = "{}{}".format(name, DEFAULT_OUTPUT_FORMAT)
+            out_filename = "{}.{}".format(name, DEFAULT_OUTPUT_FORMAT)
         else:
             out_filename = "{}_processed.{}".format(name, DEFAULT_OUTPUT_FORMAT)
-        img_processor.save(out_name=os.path.join(out_dir, out_filename))
+        img_processor.save(out_name=os.path.join(out_dir, out_filename),
+                           quality=options.quality)
     print("Done. Saved to '{}'".format(out_dir))
 
 
