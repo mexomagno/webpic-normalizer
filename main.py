@@ -9,7 +9,7 @@ from PIL import ImageEnhance as ime
 
 
 SUPPORTED_IMAGE_FORMATS = ['png', 'jpeg', 'jpg', 'bmp']
-DEFAULT_OUTPUT_FORMAT = 'JPEG'
+DEFAULT_OUTPUT_FORMAT = 'jpg'
 
 
 class ImageProcessor:
@@ -138,9 +138,9 @@ def main():
         img_processor.process()
         name, ext = os.path.splitext(os.path.basename(img_path))
         if input_is_directory:
-            out_filename = "{}{}".format(name, ext)
+            out_filename = "{}{}".format(name, DEFAULT_OUTPUT_FORMAT)
         else:
-            out_filename = "{}_processed{}".format(name, ext)
+            out_filename = "{}_processed.{}".format(name, DEFAULT_OUTPUT_FORMAT)
         img_processor.save(out_name=os.path.join(out_dir, out_filename))
     print("Done. Saved to '{}'".format(out_dir))
 
