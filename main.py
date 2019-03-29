@@ -9,6 +9,7 @@ from PIL import ImageEnhance as ime
 
 
 SUPPORTED_IMAGE_FORMATS = ['png', 'jpeg', 'jpg', 'bmp']
+DEFAULT_OUTPUT_FORMAT = 'JPEG'
 
 
 class ImageProcessor:
@@ -17,6 +18,7 @@ class ImageProcessor:
         self.output_size = output_size
         self.bg_blur = bg_blur
         self.bg_upscale = 1.1
+        self.output_image = None
 
     def process(self):
         opened_img = im.open(self.img_path)
@@ -29,7 +31,7 @@ class ImageProcessor:
             in_width = in_height * aspect_ratio_in
             bg_width = self.output_size[0] * self.bg_upscale
             bg_height = bg_width / aspect_ratio_in * self.bg_upscale
-            bgxpos = 0
+            bgxpos = self.output_size[0]/2 - bg_width/2
             bgypos = in_height/2 - bg_height/2
             xpos = self.output_size[0]/2 - in_width/2
             ypos = 0
@@ -40,7 +42,7 @@ class ImageProcessor:
             bg_height = self.output_size[1] * self.bg_upscale
             bg_width = bg_height * aspect_ratio_in * self.bg_upscale
             bgxpos = in_width/2 - bg_width/2
-            bgypos = 0
+            bgypos = self.output_size[1]/2 - bg_height/2
             xpos = 0
             ypos = self.output_size[1]/2 - in_height/2
         in_img = opened_img.resize((int(in_width), int(in_height)))
@@ -55,21 +57,35 @@ class ImageProcessor:
         out_img = im.new('RGB', self.output_size, 'black')
         out_img.paste(bg_fill, (int(bgxpos), int(bgypos)))
         out_img.paste(in_img, (int(xpos), int(ypos)))
-        out_img.show(title="Processed")
+        self.output_image = out_img
 
-
-    def save(self, output_dir=None):
-        if output_dir is None:
-            output_dir = os.path.curdir
-        print("Saving...")
-
+    def save(self, out_name):
+        if not self.output_image:
+            raise RuntimeError("You must first call '{}'".format(self.process.__name__))
+        if os.path.isfile(out_name):
+            raise RuntimeError("File '{}' already exists! Would've overriden".format(out_name))
+        input_size_bytes = os.stat(self.img_path).st_size
+        # Choose quality based on image size
+        if input_size_bytes < 512*1024:
+            quality = 90
+        elif input_size_bytes < 1024*1024:
+            quality = 70
+        else:
+            quality = 50
+        print("Will compress with quality {}".format(quality))
+        self.output_image.save(out_name,
+                               format='JPEG',
+                               quality=quality,
+                               optimize=True)
 
 
 def is_image_file(file_path):
     _, ext = os.path.splitext(os.path.basename(file_path))
     if not ext.lower().replace('.', '') in SUPPORTED_IMAGE_FORMATS:
+        print("Warning: file '{}' not a supported image file".format(os.path.basename(file_path)))
         return False
     return True
+
 
 def parse_args():
     """Parses console args."""
@@ -84,21 +100,49 @@ def parse_args():
         return path
 
     arg_parser = argparse.ArgumentParser(description="A picture processor for mom's web!")
-    arg_parser.add_argument("--output", "-o", help="Existing directory where to store the generated image(s)")
+    arg_parser.add_argument("--output-dir", '-o', help="Existing directory where to store the generated image(s)")
     arg_parser.add_argument("input", help="Existing image or directory with images to process",
                             type=_existing_image_or_directory)
     args = arg_parser.parse_args()
     return args
 
+
 def main():
     options = parse_args()
     print("options: {}".format(options))
     # Process one image
-    new_img = ImageProcessor(options.input, (800, 600))
-    new_img.process()
-    new_img.save()
+    image_paths = list()
+    out_dir = os.path.curdir
+    if options.output_dir:
+        out_dir = options.output_dir
+    input_is_directory = os.path.isdir(options.input)
+    if input_is_directory:
+        files_in_dir = os.listdir(options.input)
+        for img_file_path in [x for x in files_in_dir if is_image_file(x)]:
+            image_paths.append(os.path.join(options.input, img_file_path))
+        # Create output directory
+        new_folder = "{}_processed".format(os.path.basename(os.path.abspath(options.input)))
+        os.mkdir(new_folder)
+        out_dir = os.path.join(out_dir, new_folder)
+    else:
+        # input was a single file
+        image_paths.append(options.input)
 
 
+    print("Files to process: {}. Dir to store: {}".format(image_paths, out_dir))
+    counter = 0
+    for img_path in image_paths:
+        counter += 1
+        print("Processing {} of {}... ({}%)".format(counter, len(image_paths), int(counter/len(image_paths)*100)))
+        img_processor = ImageProcessor(img_path, (1160, 655))
+        img_processor.process()
+        name, ext = os.path.splitext(os.path.basename(img_path))
+        if input_is_directory:
+            out_filename = "{}{}".format(name, ext)
+        else:
+            out_filename = "{}_processed{}".format(name, ext)
+        img_processor.save(out_name=os.path.join(out_dir, out_filename))
+    print("Done. Saved to '{}'".format(out_dir))
 
 """
 usage example:
@@ -114,7 +158,5 @@ main.py folder_with_pics -o outdir
 
 """
 
-
 if __name__ == "__main__":
     main()
-
