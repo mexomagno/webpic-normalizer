@@ -13,11 +13,12 @@ DEFAULT_OUTPUT_FORMAT = 'jpg'
 
 
 class ImageProcessor:
-    def __init__(self, img_path, output_size, bg_blur=10):
+    def __init__(self, img_path, output_size, bg_blur, bg_opacity, bg_upscale):
         self.img_path = img_path
         self.output_size = output_size
         self.bg_blur = bg_blur
-        self.bg_upscale = 1.1
+        self.bg_opacity = bg_opacity
+        self.bg_upscale = bg_upscale
         self.output_image = None
 
     def process(self):
@@ -52,7 +53,7 @@ class ImageProcessor:
         bg_fill = bg_fill.filter(imf.GaussianBlur(self.bg_blur))
         # Opacity
         enhancer = ime.Brightness(bg_fill)
-        bg_fill = enhancer.enhance(0.5)
+        bg_fill = enhancer.enhance(self.bg_opacity)
         # Put in background
         out_img = im.new('RGB', self.output_size, 'black')
         out_img.paste(bg_fill, (int(bgxpos), int(bgypos)))
@@ -68,15 +69,21 @@ class ImageProcessor:
         # Choose quality based on image size
         if input_size_bytes < 512*1024:
             quality = 90
+            optimize = False
         elif input_size_bytes < 1024*1024:
-            quality = 70
+            quality = 90
+            optimize = False
+        elif input_size_bytes < 2*1024*1024:
+            quality = 90
+            optimize = False
         else:
-            quality = 50
+            quality = 85
+            optimize = True
         print("Will compress with quality {}".format(quality))
         self.output_image.save(out_name,
                                format='JPEG',
                                quality=quality,
-                               optimize=True)
+                               optimize=optimize)
 
 
 def is_image_file(file_path):
@@ -103,6 +110,9 @@ def parse_args():
     arg_parser.add_argument("--output-dir", '-o', help="Existing directory where to store the generated image(s)")
     arg_parser.add_argument("input", help="Existing image or directory with images to process",
                             type=_existing_image_or_directory)
+    arg_parser.add_argument("--bgblur", "-b", help="Background fill blur ammount", default=10, type=int)
+    arg_parser.add_argument("--bgopacity", "-p", help="Background fill opacity from 0 to 1", default=0.7, type=float)
+    arg_parser.add_argument("--bgupscale", "-u", help="Background fill over size from 1", default=1.1, type=float)
     args = arg_parser.parse_args()
     return args
 
@@ -130,11 +140,18 @@ def main():
 
 
     print("Files to process: {}. Dir to store: {}".format(image_paths, out_dir))
+    print("Options: ")
+    for opt in vars(options):
+        print("\t{}: {}".format(opt, getattr(options, opt)))
     counter = 0
     for img_path in image_paths:
         counter += 1
         print("Processing {} of {}... ({}%)".format(counter, len(image_paths), int(counter/len(image_paths)*100)))
-        img_processor = ImageProcessor(img_path, (1160, 655))
+        img_processor = ImageProcessor(img_path,
+                                       output_size=(1160, 655),
+                                       bg_blur=options.bgblur,
+                                       bg_opacity=options.bgopacity,
+                                       bg_upscale=options.bgupscale)
         img_processor.process()
         name, ext = os.path.splitext(os.path.basename(img_path))
         if input_is_directory:
