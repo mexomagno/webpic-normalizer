@@ -30,8 +30,10 @@ class ImageProcessor:
             # output is wider, we must match heights
             in_height = self.output_size[1]
             in_width = in_height * aspect_ratio_in
-            bg_width = self.output_size[0] * self.bg_upscale
-            bg_height = bg_width / aspect_ratio_in * self.bg_upscale
+            bg_width = self.output_size[0]
+            bg_height = bg_width / aspect_ratio_in
+            bg_width *= self.bg_upscale
+            bg_height *= self.bg_upscale
             bgxpos = self.output_size[0]/2 - bg_width/2
             bgypos = in_height/2 - bg_height/2
             xpos = self.output_size[0]/2 - in_width/2
@@ -40,8 +42,10 @@ class ImageProcessor:
             # output is narrower, we must match widths
             in_width = self.output_size[0]
             in_height = in_width / aspect_ratio_in
-            bg_height = self.output_size[1] * self.bg_upscale
-            bg_width = bg_height * aspect_ratio_in * self.bg_upscale
+            bg_height = self.output_size[1]
+            bg_width = bg_height * aspect_ratio_in
+            bg_width *= self.bg_upscale
+            bg_height *= self.bg_upscale
             bgxpos = in_width/2 - bg_width/2
             bgypos = self.output_size[1]/2 - bg_height/2
             xpos = 0
@@ -138,11 +142,10 @@ def main():
         # input was a single file
         image_paths.append(options.input)
 
-
     print("Files to process: {}. Dir to store: {}".format(image_paths, out_dir))
     print("Options: ")
     for opt in vars(options):
-        print("\t{}: {}".format(opt, getattr(options, opt)))
+        print("\t- {}: {}".format(opt, getattr(options, opt)))
     counter = 0
     for img_path in image_paths:
         counter += 1
@@ -161,19 +164,6 @@ def main():
         img_processor.save(out_name=os.path.join(out_dir, out_filename))
     print("Done. Saved to '{}'".format(out_dir))
 
-"""
-usage example:
-
-main.py image_name.ext
--- Image processed, output saved in same folder
-main.py image_name.ext -o outdir
--- image processed, output to specified dir
-main.py folder_with_pics
--- All images in folder processed and stored in new output folder
-main.py folder_with_pics -o outdir
--- Same but outputed to specified dir
-
-"""
 
 if __name__ == "__main__":
     main()
